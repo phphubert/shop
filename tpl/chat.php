@@ -34,6 +34,26 @@
 </div>
 </body>
 <script type="text/javascript">
+    setInterval("synccheck()",30000);
+    function synccheck(){
+       var synckey = sessionStorage.synckey;
+
+       if(!synckey){
+           return;
+       }
+       
+        $.ajax({
+            url : "index.php?act=synccheck",
+            datatype:'json',
+            type:'post',
+            data : {synckey: synckey},
+            success : function(data){
+                console.log(data);
+            }  
+        });
+    }
+    
+    
 $(function(){
 	if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
 		alert('暂不支持移动端访问，请移步PC端！');
@@ -52,10 +72,12 @@ $(function(){
 			data : {},
 			success : function(data){
 				var res = JSON.parse(data);
-
 				//将synckey存入本地缓存，后续步骤需要
-				synckey =  JSON.stringify(res.SyncKey);//json 串形式存入
-				sessionStorage.synckey = synckey;
+                                if(res.SyncKey){
+                                    synckey =  JSON.stringify(res.SyncKey);//json 串形式存入
+                                    sessionStorage.synckey = synckey;
+                                }
+
 				muname = res.User.UserName;
 				sessionStorage.username = muname;
 				mnickname = res.User.NickName;
@@ -77,7 +99,7 @@ $(function(){
 	            		+'<p class="name">'+ userlist[key].NickName +'</p>'
 	        			+'</li>';
 				}
-				$(".m-list ul").append(str);
+				//$(".m-list ul").append(str);
 			    //滚动到底部
 			    $(".m-message").scrollTop($('.m-message ul')[0].scrollHeight);
 			},
@@ -126,6 +148,8 @@ $(function(){
 
 
 	//var sync = setInterval("syncWx()",1000);
+        
+ 
 	sync();
 	function sync(){
 		//syncWx = function (){
@@ -184,8 +208,6 @@ $(function(){
 				}
 			},
 			error : function(data){
-				alert('服务器出错，请重新扫码登陆！');
-				window.location.href='index.php';
 			}
 		})
 

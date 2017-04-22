@@ -1,20 +1,5 @@
 <?php
-/**
-*Author @nango
-*
-*  封装的网页版微信通讯类
-* 参考文章http://www.tanhao.me/talk/1466.html/
-* 通讯步骤
-*  1，微信服务器返回一个会话ID
-*  2.通过会话ID获得二维码
-*  3.轮询手机端是否已经扫描二维码并确认在Web端登录
-*  4.访问登录地址，获得uin和sid
-*  5.初使化微信信息
-*  6.获得所有的好友列表
-*  7.保持与服务器的信息同步
-*  8.获得别人发来的消息
-*  9.向用户发送消息
-**/
+
 
 class wechat {
 
@@ -27,12 +12,6 @@ class wechat {
 	* loginUrl 扫描二维码并确认后返回的登录url
 	**/
 	private $loginUrl = '';
-
-	/**
-	* toLingUrl 图灵机器人api
-	**/
-	private $tlApi = 'http://www.tuling123.com/openapi/api';
-	private $tlAppkey = '820176b52352471a943d73a8c304ad32';
 	
 	/**
 	 * 发起GET请求
@@ -178,11 +157,12 @@ class wechat {
             $info = array('status' => 0, 'msg' => '无法获取cookies');
         	return $info;//这里是设置个错误信息的反馈
         }
-         
+ 
         //正则匹配出wxuin、wxsid
-        preg_match('/wxuin=;/iU',$content,$uin); 
+        preg_match('/wxuin=(.*);/iU',$content,$uin); 
         preg_match('/wxsid=(.*);/iU',$content,$sid);
         preg_match('/webwx_data_ticket=(.*);/iU',$content,$webwx);
+ 
         //@TODO将wxuin、wxsid、webwx_data_ticket存入cookies，以便获取微信头像----暂无效 
         /*if(preg_match_all('/Set-Cookie:[\s]+([^=]+)=([^;]+)/i', $content,$match)) {
 		  foreach ($match[1] as $key => $cookieKey ) {
@@ -247,6 +227,18 @@ class wechat {
 		}
 		
 		$res = $this->post($url, '{}',$cookie_jar);
+                $res = json_decode($res,1);
+                if(!empty($res['MemberList'])){
+                    foreach ($res['MemberList'] as $k=>$v) {
+                        if ((($v['VerifyFlag'] & 8) != 0) || (strpos($v['UserName'], '@@') !== false)) {  // 公众号/服务号
+                            unset($res['MemberList'][$k]);
+                        }
+
+                    }
+                }
+
+                $res = json_encode($res);
+                
 		return $res;
 	}
 
@@ -273,6 +265,25 @@ class wechat {
 		$data['SyncKey'] = json_decode($synckey);
 		$data['rr'] = time();
 		$res = $this->post($url, json_encode($data),$cookie_jar);
+                
+               $res = json_decode($res,1);
+                if($res['AddMsgCount'] && $res['BaseResponse']['Ret']==0){
+                    foreach($res['AddMsgList'] as $k=>$msg){
+                        $content = $msg['Content'];
+                        preg_match('/cdnurl\s*=\s*"(.+?)"/',$content,$match);//自定义的表情
+                       if(isset($match[1])){
+                           $content = "<img src='$match[1]'/>";
+                       }
+                       if(preg_match('/&lt;\?xml version="1.0"\?&gt;<br\/>&lt;msg&gt;<br\/>\s*&lt;img/', $content)){//图片
+                            $MsgId = $msg['MsgId'];
+                            $this->getimage($MsgId);//保存消息图片到本地
+                            $content = "<img src='/webchat-robot/{$MsgId}.jpg'/>";
+                       }
+ 
+                        $res['AddMsgList'][$k]['Content'] = $content;
+                    }
+                }
+                $res = json_encode($res);
 		return $res;
 	}
 
@@ -315,37 +326,50 @@ class wechat {
 	* @return mixed
 	**/
 	public function  getAvatar($uri = ''){
-	    $cookie = dirname(__FILE__)."/".$_SESSION['uuid'].".cookie";
+	        $cookie = dirname(__FILE__)."/".$_SESSION['uuid'].".cookie";
 		$url = "https://wx.qq.com".$uri;
 		$res = $this->get($url, $cookie);
 		echo $res;
 		}
-
-	/**
-	* 图灵机器人 =》文本
-	* @access public
-	* @param $toUsername string 
-	* @return mixed
-	**/
-	public function sendMessageToTuling($content = ''){
-		$data = array(
-			'key' => $this->tlAppkey,
-			'info' => $content,
-			'userid' => '123456789'
-			);
-		$res = $this->post($this->tlApi,json_encode($data,JSON_UNESCAPED_UNICODE),'',1);
-		$r = json_decode($res,true);
-		//文本类
-		if(isset($r['url'])){
-			//存在链接则发送链接
-			return $r['url'];
-		}
-		return $r['text'];
-
-		
+        
+        //根据消息ID保存图片下来
+	public function  getimage($msgid = ''){
+	        $cookie = dirname(__FILE__)."/".$_SESSION['uuid'].".cookie";
+		$url = "https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxgetmsgimg?&MsgID={$msgid}&skey=&type=big";
+		$res = $this->get($url, $cookie);
+                $filename = $msgid.'.jpg';
+                $fp= @fopen($filename,"a");
+                fwrite($fp,$res); //写入文件  
+                fclose($fp);
 	}
+        
+        /**保持与服务器的信息同步
+         *window.synccheck={retcode:”0”,selector:”0”}
+         *如果retcode中的值不为0，则说明与服务器的通信有问题了，但具体问题我就无法预测了，selector中的值表示客户端需要作出的处理，目前已经知道当为6的时候表示有消息来了，就需要去访问另一个接口获得新的消息。
+         */
+        public function synccheck($synckey){
+                $uin = $_SESSION['uin'];
+                $sid = $_SESSION['sid'];
+                $cookie = dirname(__FILE__)."/".$_SESSION['uuid'].".cookie";
+                $params = array(
+                    'r' => time(),
+                    'sid' => $sid,
+                    'uin' => $uin,
+                    'skey' => '',
+                    'devicedid' => 'e287276317582836',
+                    'synckey' => $synckey,
+                    '_' => time()
+                );
+               
+                $url = 'https://webpush.wx.qq.com/cgi-bin/mmwebwx-bin/synccheck?'.http_build_query($params);
 
-	//转换为UTF-8
+                $data = $this->get($url,$cookie);
+ 
+                return $data;
+        }
+ 
+
+        //转换为UTF-8
 	public function characet($data){
 	  if( !empty($data) ){
 	    $fileType = mb_detect_encoding($data , array('UTF-8','GBK','LATIN1','BIG5')) ;
