@@ -77,6 +77,20 @@ switch ($act) {
     $message = $wechat->synccheck($synckey);
     exit($message);
     break;
+  case 'uploadimg':
+  
+    $file = "upload/" . $_FILES["file"]["name"];
+    move_uploaded_file($_FILES["file"]["tmp_name"], $file);
+  
+    $ToUserName = $_GET['toUsername'];
+    $ret= $wechat->uploadMedia($ToUserName, $file);
+    if($wechat->webwxsendmsgimg($ToUserName, $ret['MediaId'])){
+  
+    }
+    break;
+  
+
+
   
   default:
     # code...

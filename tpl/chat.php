@@ -5,6 +5,44 @@
 	<link href="static/chat.css" rel='stylesheet' type='text/css' />
 	<script src="static/jquery-1.7.2.js"></script>
 </head>
+<style>
+ 
+
+/*a  upload */
+.a-upload {
+    padding: 4px 10px;
+    height: 20px;
+    line-height: 20px;
+    position: relative;
+    cursor: pointer;
+    color: #888;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    display: inline-block;
+    *display: inline;
+    *zoom: 1
+}
+
+.a-upload  input {
+    position: absolute;
+    font-size: 100px;
+    right: 0;
+    top: 0;
+    opacity: 0;
+    filter: alpha(opacity=0);
+    cursor: pointer
+}
+
+.a-upload:hover {
+    color: #444;
+    background: #eee;
+    border-color: #ccc;
+    text-decoration: none
+}
+    
+</style>
 <body>
 
 <div id="chat">
@@ -28,6 +66,11 @@
         </div>
         <!--send-->
         <div class="m-text">
+            <form id="uploadForm" enctype="multipart/form-data">
+                <a href="javascript:;" class="a-upload"><input id="file" type="file" name="file" style="" />
+                   点击这里上传文件
+                </a>
+            </form>
             <textarea placeholder="按 Ctrl + Enter 发送" class="input"></textarea>
         </div>
     </div>
@@ -73,10 +116,10 @@ $(function(){
 			success : function(data){
 				var res = JSON.parse(data);
 				//将synckey存入本地缓存，后续步骤需要
-                                if(res.SyncKey){
-                                    synckey =  JSON.stringify(res.SyncKey);//json 串形式存入
-                                    sessionStorage.synckey = synckey;
-                                }
+                                 console.log(res.SyncKey);
+                                synckey =  JSON.stringify(res.SyncKey);//json 串形式存入
+                                sessionStorage.synckey = synckey;
+                         
 
 				muname = res.User.UserName;
 				sessionStorage.username = muname;
@@ -108,6 +151,27 @@ $(function(){
 			}
 		});
 	//初始化 结束
+        
+        $("#file").change(function(){
+               var username = sessionStorage.username;
+                var toUsername = $('.to-user').attr('username');
+                if(toUsername == ''){
+                        alert('发送人不能为空！');
+                        return;
+                }
+               
+                $.ajax({
+                    url: 'index.php?act=uploadimg&username='+username+'&toUsername='+toUsername,
+                    type: 'POST',
+                    cache: false,
+                    data: new FormData($('#uploadForm')[0]),
+                    processData: false,
+                    contentType: false
+                }).done(function(res) {
+                }).fail(function(res) {});
+           
+        });
+        
 
 	//获取所有好友列表
 	$.ajax({
