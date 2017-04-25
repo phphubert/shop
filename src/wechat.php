@@ -2,7 +2,10 @@
 
 
 class wechat {
-
+        
+        private $special_users = array(
+            'newsapp', 'fmessage', 'weibo', 'qqmail', 'fmessage', 'tmessage', 'qmessage', 'qqsync', 'floatbottle', 'lbsapp', 'shakeapp', 'medianote', 'qqfriend', 'readerapp', 'blogapp', 'facebookapp', 'masssendapp', 'meishiapp', 'feedsapp', 'voip', 'blogappweixin', 'weixin', 'brandsessionholder', 'weixinreminder', 'wxid_novlwrv3lqwv11', 'gh_22b87fa7cb3c', 'officialaccounts', 'notification_messages', 'wxid_novlwrv3lqwv11', 'gh_22b87fa7cb3c', 'wxitil', 'userexperience_alarm', 'notification_messages'
+        );
 	/**
 	* uuid 微信服务器返回的会话id
 	**/
@@ -82,7 +85,8 @@ class wechat {
 	}
         
         
-        private function _post($url, $param, $jsonfmt = true, $post_file = false) {
+        private function _post($url, $param, $jsonfmt = true, $post_file = false,$cookie = '') {
+         
             $oCurl = curl_init();
             if (stripos($url, "https://") !== FALSE) {
                 curl_setopt($oCurl, CURLOPT_SSL_VERIFYPEER, FALSE);
@@ -129,8 +133,10 @@ class wechat {
             curl_setopt($oCurl, CURLOPT_RETURNTRANSFER, 1);
             curl_setopt($oCurl, CURLOPT_POST, true);
             curl_setopt($oCurl, CURLOPT_POSTFIELDS, $strPOST);
-//            curl_setopt($oCurl, CURLOPT_COOKIEFILE, $this->cookie);
-//            curl_setopt($oCurl, CURLOPT_COOKIEJAR, $this->cookie);
+	    if($cookie){
+	    	curl_setopt($oCurl, CURLOPT_COOKIEFILE, $cookie);
+	    	curl_setopt ($oCurl, CURLOPT_REFERER,'https://wx.qq.com');
+	    }
             $sContent = curl_exec($oCurl);
             $aStatus = curl_getinfo($oCurl);
             curl_close($oCurl);
@@ -307,7 +313,6 @@ class wechat {
                 $apihost = $_SESSION['apihost'];
 		$url = sprintf("https://%s/cgi-bin/mmwebwx-bin/webwxgetcontact?lang=zh_CN&r=%s&seq=0", $apihost,$this->getMillisecond());
 		if(!$uin || !$sid){
-			 
 			  $uin = $_SESSION['uin'];
         	          $sid = $_SESSION['sid'];
 		}
@@ -316,10 +321,15 @@ class wechat {
                 $res = json_decode($res,1);
                 if(!empty($res['MemberList'])){
                     foreach ($res['MemberList'] as $k=>$v) {
-                        if ((($v['VerifyFlag'] & 8) != 0) || (strpos($v['UserName'], '@@') !== false)) {  // 公众号/服务号
+                        if (($v['VerifyFlag'] & 8) != 0) {  // 公众号/服务号
+                          unset($res['MemberList'][$k]);
+                      } elseif (in_array($v['UserName'], $this->special_users)) {   // 特殊账号
+                          unset($res['MemberList'][$k]); 
+                      } elseif (strpos($v['UserName'], '@@') !== false) { // 群聊
+                           
+                     } elseif ($v['UserName'] == $_SESSION['username']) {  // 自己
                             unset($res['MemberList'][$k]);
-                        }
-
+                      }
                     }
                 }
 
@@ -328,8 +338,36 @@ class wechat {
 		return $res;
 	}
 
-
 	/**
+	* 根据群名称获取群信息
+	* @access public
+	* @param $id string 用户uin
+	* @return mixed
+	**/
+        public function getNameById($id){
+             $uin = $_SESSION['uin'];
+             $sid = $_SESSION['sid'];
+             $apihost = $_SESSION['apihost'];
+             $pass_ticket = $_SESSION['pass_ticket'];
+             $DeviceID = $_SESSION['DeviceID'] ;
+             $cookie_jar = dirname(__FILE__)."/".$_SESSION['uuid'].".cookie";
+             $url = sprintf('https://%s/cgi-bin/mmwebwx-bin/webwxbatchgetcontact?type=ex&r=%s&pass_ticket=%s',$apihost,time(),$pass_ticket);
+             $BaseRequest = array(
+                    'Uin' => $uin,
+                    'Sid' => $sid,
+                    'Skey' => '',
+                    'DeviceID' => $DeviceID
+                    );
+             $params = [
+                 'BaseRequest' => $BaseRequest,
+                 "Count" => 1,
+                 "List" => [["UserName" => $id, "EncryChatRoomId" => ""]]
+             ];
+             $dic = $this->_post($url, $params,true,FALSE,$cookie_jar);
+             return $dic;
+        }
+ 
+      /**
 	* 登录成功，保持与服务器的信息同步，获取是否有推送消息等
 	* @access public
 	* @param $synckey string 
@@ -357,6 +395,10 @@ class wechat {
                 if($res['AddMsgCount'] && $res['BaseResponse']['Ret']==0){
                     foreach($res['AddMsgList'] as $k=>$msg){
                         $content = $msg['Content'];
+                        if (substr( $msg[ 'FromUserName' ], 0, 2 ) == '@@' && stripos( $content, ':<br/>') !== false ) {
+                              list($people, $content) = explode( ':<br/>', $content );
+                              $res['AddMsgList'][$k]['tureFromUserName'] = $people;
+                        }
                         preg_match('/cdnurl\s*=\s*"(.+?)"/',$content,$match);//自定义的表情
                        if(isset($match[1])){
                            $content = "<img src='$match[1]'/>";
@@ -582,7 +624,7 @@ class wechat {
         }
         
         //发送图片消息
-        public function webwxsendmsgimg($user_id, $media_id){
+        public function webwxsendmsgimg($ToUserName, $media_id){
             $apihost = $_SESSION['apihost'];
             $pass_ticket = $_SESSION['pass_ticket'];
             $DeviceID = $_SESSION['DeviceID'] ;
@@ -602,7 +644,7 @@ class wechat {
                     "Type" => 3,
                     "MediaId" => $media_id,
                     "FromUserName" => $_SESSION['username'],
-                    "ToUserName" => $user_id,
+                    "ToUserName" => $ToUserName,
                     "LocalID" => $clientMsgId,
                     "ClientMsgId" => $clientMsgId
                 ]

@@ -77,21 +77,23 @@ switch ($act) {
     $message = $wechat->synccheck($synckey);
     exit($message);
     break;
-  case 'uploadimg':
-  
+  case 'uploadimg'://发送图片
     $file = "upload/" . $_FILES["file"]["name"];
     move_uploaded_file($_FILES["file"]["tmp_name"], $file);
-  
     $ToUserName = $_GET['toUsername'];
-    $ret= $wechat->uploadMedia($ToUserName, $file);
-    if($wechat->webwxsendmsgimg($ToUserName, $ret['MediaId'])){
-  
+    $ret= $wechat->uploadMedia($ToUserName, $file);//先上传素材 得到媒体id
+    if($ret['MediaId']){
+         if($wechat->webwxsendmsgimg($ToUserName, $ret['MediaId'])){
+             exit(json_encode(array('file'=>$file,'status'=>1)));
+         }else{
+             exit(json_encode(array('file'=>$file,'status'=>0)));
+         }
     }
     break;
-  
-
-
-  
+  case 'webwxbatchgetcontact':
+      $id = $_POST['fname'];
+      echo json_encode($wechat->getNameById($id));
+      break;
   default:
     # code...
     break;

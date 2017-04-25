@@ -168,6 +168,22 @@ $(function(){
                     processData: false,
                     contentType: false
                 }).done(function(res) {
+                    var res = JSON.parse(res);
+                    if(res.status != undefined && res.status =='1'){
+                            var str = '<li>'
+                                +'<p class="time"><span></span></p>'
+                                +'<div class="main self">'
+                                +'<img class="avatar" width="30" height="30" src="'+ myheadimg +'">'
+                                +'<div class="nick">'+ sessionStorage.nickname +'</div>'
+                                +'<div class="text">'+ '<img style=\'max-height:100px;max-width:100px;padding-top: 9px;\' src="'+res.file+'" />' +'</div>'
+                                +'</div>'
+                                        +'</li>';
+                                                        $(".m-message ul").append(str);
+                                                    //滚动到底部
+                                                    $(".m-message").scrollTop($('.m-message ul')[0].scrollHeight);
+                                                }
+                    
+                    
                 }).fail(function(res) {});
            
         });
@@ -191,10 +207,12 @@ $(function(){
 				var uname = userlist[key].UserName;
 				var nickname = userlist[key].NickName;
 				str += '<li class="active" username="'+ uname +'">'
-            		+'<img class="avatar" width="30" height="30"  src="'+img+'" />'
-            		+'<p class="name">'+ nickname +'</p>'
-        			+'</li>';
-        		users[uname] = nickname;
+                                +'<img class="avatar" width="30" height="30"  src="'+img+'" />'
+                                +'<p class="name">'+ nickname +'</p>'
+                                        +'</li>';
+                                users[uname] = nickname;
+                                
+              
 			}
 			//把登陆用户的信息也附加上
 			users[muname] = mnickname;
@@ -246,16 +264,49 @@ $(function(){
 						//StatusNotifyCode=2 为通知消息
 						if (messagelist[key].StatusNotifyCode == 0){
 							var fname = messagelist[key].FromUserName;
-							var uri = "/cgi-bin/mmwebwx-bin/webwxgeticon?seq=620940058&username="+ fname +"&skey=";
-							var userHeadimg = 'index.php?act=avatar&uri=' + escape(uri);
-                                                                        str += '<li>'
-                                                        +'<p class="time"><span></span></p>'
-                                                        +'<div class="main">'
-                                                        +'<img class="avatar" width="30" height="30" src="'+ userHeadimg +'">'
-                                                        +'<div class="nick">'+ users[fname] +'</div>'
-                                                        +'<div class="text">'+ messagelist[key].Content +'</div>'
-                                                        +'</div>'
-                                                        +'</li>';
+                                                        var tureFromUserName = messagelist[key].tureFromUserName;
+                                                        var nick = users[fname];
+                                                        if(fname.indexOf('@@')>-1){
+                                                            if( sessionStorage['g'+fname] == undefined){
+                                                                    $.ajax({
+                                                                           url:'index.php?act=webwxbatchgetcontact',
+                                                                           datatype:'json',
+                                                                           type:'post',
+                                                                           async:false,
+                                                                           data:{'fname':fname},
+                                                                           success : function(res){
+                                                                               console.log(res);
+                                                                               sessionStorage['g'+fname] = res;
+                                                                           }
+                                                                    });
+                                                            }
+                                                            
+                                                            console.log(sessionStorage['g'+fname]);
+                                                            var groupinfo = JSON.parse(sessionStorage['g'+fname]);
+                                                            var MemberList = groupinfo.ContactList[0].MemberList;
+                                                            for(var i in MemberList){
+                                                                console.log(MemberList[i]);
+                                                                if(MemberList[i]['UserName']==tureFromUserName){
+                                                                    fname = tureFromUserName;
+                                                                    nick =  MemberList[i]['NickName'];
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+                                                              
+                                                            var uri = "/cgi-bin/mmwebwx-bin/webwxgeticon?seq=620940058&username="+ fname +"&skey=";
+                                                            var userHeadimg = 'index.php?act=avatar&uri=' + escape(uri);
+                                                                            str += '<li>'
+                                                            +'<p class="time"><span></span></p>'
+                                                            +'<div class="main">'
+                                                            +'<img class="avatar" width="30" height="30" src="'+ userHeadimg +'">'
+                                                            +'<div class="nick">'+ nick +'</div>'
+                                                            +'<div class="text">'+ messagelist[key].Content +'</div>'
+                                                            +'</div>'
+                                                            +'</li>';
+                                                    
+  
+
 
 
 						}
